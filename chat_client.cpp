@@ -1,5 +1,7 @@
 // chat_client.cpp : chat room client
 
+//#define DEBUG
+
 #include <cstdlib>
 #include <deque>
 #include <iostream>
@@ -17,14 +19,20 @@ public:
         io_context_(io_context), 
         socket_(io_context){
 
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         std::memcpy(id_, id, chat_message::id_length);
         
         do_connect(endpoints);
     }
 
     void write(chat_message& msg) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         auto f = [this, msg]() {
             bool write_in_progress = !write_msgs_.empty();
             write_msgs_.push_back(msg);
@@ -37,7 +45,10 @@ public:
     }
 
     void close() {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         auto f = [this]() {
             socket_.close();
         };
@@ -53,7 +64,10 @@ private:
     char id_[chat_message::id_length + 1];
 
     void do_connect(const tcp::resolver::results_type& endpoints) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         boost::asio::async_connect(socket_, endpoints, 
             [this](boost::system::error_code error, tcp::endpoint) {
                 if (!error) {
@@ -64,7 +78,10 @@ private:
     }
 
     void send_id() {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         boost::asio::async_write(socket_, 
             boost::asio::buffer(id_, chat_message::id_length), 
             [this](boost::system::error_code error, std::size_t /*length*/) {
@@ -75,7 +92,10 @@ private:
     }
 
     void do_read_header() {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         boost::asio::async_read(socket_, 
             boost::asio::buffer(read_msg_.data(), chat_message::header_length), 
             [this](boost::system::error_code error, std::size_t /*length*/) {
@@ -88,7 +108,10 @@ private:
     }
 
     void do_read_body() {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         boost::asio::async_read(socket_,
             boost::asio::buffer(read_msg_.body(), read_msg_.body_length()), 
             [this](boost::system::error_code error, std::size_t /*length*/){
@@ -105,7 +128,10 @@ private:
     }
 
     void do_write() {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         chat_message& msg = write_msgs_.front();
         boost::asio::async_write(socket_, 
             boost::asio::buffer(msg.data(), msg.length()), 

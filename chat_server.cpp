@@ -1,5 +1,7 @@
 // chat_room.cpp: char room server
 
+//#define DEBUG
+
 #include <algorithm>
 #include <cstdlib>
 #include <deque>
@@ -29,7 +31,10 @@ class chat_room {
 public: 
 
     void join(chat_participant_ptr new_participant) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         std::cout << new_participant->id() << " joined the chat" << std::endl;
 
         participants_.insert(new_participant);
@@ -53,7 +58,10 @@ public:
     }
 
     void leave(chat_participant_ptr participant) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         std::cout << participant->id() << " left the chat" << std::endl;
 
         participants_.erase(participant);
@@ -73,7 +81,10 @@ public:
     }
 
     void deliver(const chat_message& msg) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         // push the new message into the queue
         recent_msg_.push_back(msg);
         while (recent_msg_.size() > max_recent_msg) recent_msg_.pop_front();
@@ -83,9 +94,9 @@ public:
             if (std::strncmp(msg.id(), participant->id(), chat_message::id_length) != 0)
                 participant->deliver(msg);
             else {
-                std::cout.write(msg.id(), chat_message::id_length);
-                std::cout << "\n";
-                std::cout.write(participant->id(), chat_message::id_length);
+                //std::cout.write(msg.id(), chat_message::id_length);
+                //std::cout << "\n";
+                //std::cout.write(participant->id(), chat_message::id_length);
             }
     }
 
@@ -110,7 +121,10 @@ public:
     }
 
     void wait_for_id() {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         boost::asio::async_read(socket_,
             boost::asio::buffer(id_, chat_message::id_length),
             boost::bind(&chat_session::start, 
@@ -119,7 +133,10 @@ public:
     }
     
     void start(const boost::system::error_code& error) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
 
         room_.join(shared_from_this());
         // read the header from read_msg_ first
@@ -132,7 +149,10 @@ public:
     }
 
     void handle_read_header(const boost::system::error_code& error) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         if (!error && read_msg_.decode_header()) {
             //std::cout << id_ << " sends message with length:" << read_msg_.body_length() << std::endl;
             boost::asio::async_read(socket_, 
@@ -146,7 +166,10 @@ public:
     }
 
     void handle_read_body(const boost::system::error_code& error) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         if (!error) {
             std::cout << id_ << " says: ";
             std::cout.write(read_msg_.msg(), read_msg_.body_length() - chat_message::id_length);
@@ -166,7 +189,10 @@ public:
     }
 
     void deliver(const chat_message& msg) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         bool write_in_progress = !write_msgs_.empty();
         write_msgs_.push_back(msg);
         if (!write_in_progress) {
@@ -180,7 +206,10 @@ public:
     }
 
     void handle_write(const boost::system::error_code& error) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
+
         if (!error) {
             write_msgs_.pop_front();
 
@@ -219,7 +248,9 @@ public:
     chat_server(boost::asio::io_context& io_context, tcp::endpoint& endpoint) : 
         io_context_(io_context), 
         acceptor_(io_context, endpoint) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
         
         chat_session_ptr session(new chat_session(io_context_, room_));
         acceptor_.async_accept(session->socket(), 
@@ -229,7 +260,9 @@ public:
 
     void handle_accept(chat_session_ptr session, 
         const boost::system::error_code &error) {
+        #ifdef DEBUG
         std::cout << __FUNCTION__ << std::endl;
+        #endif
         
         if (!error) {
             session->wait_for_id();
