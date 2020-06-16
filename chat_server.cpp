@@ -17,6 +17,7 @@ using boost::asio::ip::tcp;
 class chat_participant {
 public:
     virtual ~chat_participant(){}
+    virtual const char* id() const = 0;
     virtual void deliver(const chat_message& msg) = 0;
 };
 
@@ -29,16 +30,46 @@ public:
 
     void join(chat_participant_ptr new_participant) {
         std::cout << __FUNCTION__ << std::endl;
+        std::cout << new_participant->id() << " joined the chat" << std::endl;
+
         participants_.insert(new_participant);
 
         // deliver recent messages to the new participants
         for (auto msg : recent_msg_)
             new_participant->deliver(msg);
+        
+        // deliever the messages that a new participant joined the chat
+        chat_message msg;
+        char admin_id[chat_message::id_length + 1] = "Admin";
+        std::string admin_msg(new_participant->id());
+        admin_msg += " joined the chat";
+
+        msg.body_length(admin_msg.length() + chat_message::id_length);
+        std::memcpy(msg.id(), admin_id, chat_message::id_length);
+        std::memcpy(msg.msg(), admin_msg.c_str(), admin_msg.length());
+        msg.encode_header();
+
+        deliver(msg);
     }
 
     void leave(chat_participant_ptr participant) {
         std::cout << __FUNCTION__ << std::endl;
+        std::cout << participant->id() << " left the chat" << std::endl;
+
         participants_.erase(participant);
+
+        // deliever the messages that a participant left the chat
+        chat_message msg;
+        char admin_id[chat_message::id_length + 1] = "Admin";
+        std::string admin_msg(participant->id());
+        admin_msg += " left the chat";
+
+        msg.body_length(admin_msg.length() + chat_message::id_length);
+        std::memcpy(msg.id(), admin_id, chat_message::id_length);
+        std::memcpy(msg.msg(), admin_msg.c_str(), admin_msg.length());
+        msg.encode_header();
+
+        deliver(msg);
     }
 
     void deliver(const chat_message& msg) {
@@ -49,7 +80,13 @@ public:
 
         // deliver the new message to all the participants
         for (auto participant : participants_)
-            participant->deliver(msg);
+            if (std::strncmp(msg.id(), participant->id(), chat_message::id_length) != 0)
+                participant->deliver(msg);
+            else {
+                std::cout.write(msg.id(), chat_message::id_length);
+                std::cout << "\n";
+                std::cout.write(participant->id(), chat_message::id_length);
+            }
     }
 
 private:
@@ -72,12 +109,17 @@ public:
         return socket_;
     }
 
-    void start() {
+    void wait_for_id() {
         std::cout << __FUNCTION__ << std::endl;
-        std::stringstream ss;
-        ss << socket_.remote_endpoint().address() << ":" << socket_.remote_endpoint().port();
-        id_ = ss.str();
-        std::cout << id_ << " connected" << std::endl;
+        boost::asio::async_read(socket_,
+            boost::asio::buffer(id_, chat_message::id_length),
+            boost::bind(&chat_session::start, 
+                shared_from_this(),  
+                boost::asio::placeholders::error));
+    }
+    
+    void start(const boost::system::error_code& error) {
+        std::cout << __FUNCTION__ << std::endl;
 
         room_.join(shared_from_this());
         // read the header from read_msg_ first
@@ -92,7 +134,7 @@ public:
     void handle_read_header(const boost::system::error_code& error) {
         std::cout << __FUNCTION__ << std::endl;
         if (!error && read_msg_.decode_header()) {
-            std::cout << id_ << " sends message with length:" << read_msg_.body_length() << std::endl;
+            //std::cout << id_ << " sends message with length:" << read_msg_.body_length() << std::endl;
             boost::asio::async_read(socket_, 
                 boost::asio::buffer(read_msg_.body(), read_msg_.body_length()), 
                 boost::bind(&chat_session::handle_read_body,
@@ -106,8 +148,8 @@ public:
     void handle_read_body(const boost::system::error_code& error) {
         std::cout << __FUNCTION__ << std::endl;
         if (!error) {
-            std::cout << id_ << " sends message:";
-            std::cout.write(read_msg_.body(), read_msg_.body_length());
+            std::cout << id_ << " says: ";
+            std::cout.write(read_msg_.msg(), read_msg_.body_length() - chat_message::id_length);
             std::cout << std::endl;
 
             room_.deliver(read_msg_);
@@ -156,12 +198,16 @@ public:
         }
     }
 
+    const char* id() const{
+        return id_;
+    }
+
 private:
     tcp::socket socket_;
     chat_room& room_;
     chat_message read_msg_;
     std::deque<chat_message> write_msgs_;
-    std::string id_;
+    char id_[chat_message::id_length + 1];
 };
 
 typedef boost::shared_ptr<chat_session> chat_session_ptr;
@@ -186,7 +232,7 @@ public:
         std::cout << __FUNCTION__ << std::endl;
         
         if (!error) {
-            session->start();
+            session->wait_for_id();
             chat_session_ptr new_session(new chat_session(io_context_, room_));
             acceptor_.async_accept(new_session->socket(), 
                 boost::bind(&chat_server::handle_accept, this, new_session, 

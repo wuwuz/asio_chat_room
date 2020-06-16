@@ -7,10 +7,14 @@
 
 class chat_message {
 
+    //data : xxxxyyyyyyyy.........
+    //xxxx: header, encode body length, fixed 4 chars
+    //yyyyyyyy: id, fixed 8 chars
+
 public : 
     enum { header_length = 4 }; // 4 digit header
-    enum { id_length = 8; } // 4 digit id_length
-    enum { max_body_length = 1024 }; // 1KB body
+    enum { id_length = 8 }; // 4 digit id_length
+    enum { max_body_length = 1024 }; // at most 1KB body
 
     chat_message() : body_length_(0) {
     }
@@ -26,22 +30,29 @@ public :
     std::size_t length() {
         return body_length_ + header_length;
     }
-
     
-    //const char* id() const {
-        //return data_ + header_length;
-    //}
+    const char* id() const {
+        return data_ + header_length;
+    }
 
-    //char* id() {
-        //return data_ + header_length;
-    //}
+    char* id() {
+        return data_ + header_length;
+    }
 
     const char* body() const {
-        return data_ + header_length ;
+        return data_ + header_length;
     }
 
     char* body() {
         return data_ + header_length;
+    }
+
+    const char* msg() const {
+        return data_ + header_length + id_length;
+    }
+
+    char* msg() {
+        return data_ + header_length + id_length;
     }
 
     std::size_t body_length() {
@@ -72,7 +83,7 @@ public :
     }
 
 private:
-    char data_[header_length + max_body_length];
+    char data_[header_length + id_length + max_body_length];
     std::size_t body_length_;
 };
 

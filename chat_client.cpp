@@ -12,11 +12,13 @@ using boost::asio::ip::tcp;
 class chat_client {
 public:
     chat_client(boost::asio::io_context& io_context, 
-        tcp::resolver::results_type& endpoints) :
+        tcp::resolver::results_type& endpoints,
+        char* id) :
         io_context_(io_context), 
         socket_(io_context){
 
         std::cout << __FUNCTION__ << std::endl;
+        std::memcpy(id_, id, chat_message::id_length);
         
         do_connect(endpoints);
     }
@@ -48,11 +50,24 @@ private:
     tcp::socket socket_;
     chat_message read_msg_;
     std::deque<chat_message> write_msgs_;
+    char id_[chat_message::id_length + 1];
 
     void do_connect(const tcp::resolver::results_type& endpoints) {
         std::cout << __FUNCTION__ << std::endl;
         boost::asio::async_connect(socket_, endpoints, 
             [this](boost::system::error_code error, tcp::endpoint) {
+                if (!error) {
+                    //do_read_header();
+                    send_id();
+                }
+            });
+    }
+
+    void send_id() {
+        std::cout << __FUNCTION__ << std::endl;
+        boost::asio::async_write(socket_, 
+            boost::asio::buffer(id_, chat_message::id_length), 
+            [this](boost::system::error_code error, std::size_t /*length*/) {
                 if (!error) {
                     do_read_header();
                 }
@@ -78,8 +93,9 @@ private:
             boost::asio::buffer(read_msg_.body(), read_msg_.body_length()), 
             [this](boost::system::error_code error, std::size_t /*length*/){
                 if (!error) {
-                    std::cout << "message: ";
-                    std::cout.write(read_msg_.body(), read_msg_.body_length());
+                    std::cout.write(read_msg_.id(), chat_message::id_length);
+                    std::cout << " says: ";
+                    std::cout.write(read_msg_.msg(), read_msg_.body_length() - chat_message::id_length);
                     std::cout << "\n";
                     do_read_header();
                 } else {
@@ -107,16 +123,24 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        std::cerr << "Usage: chat_client <host> <port>" << std::endl;
+    if (argc != 4) {
+        std::cerr << "Usage: chat_client <host> <port> <userid>" << std::endl;
         return 1;
     }
+
+    if (std::strlen(argv[3]) > chat_message::id_length) {
+        std::cerr << "Error: userid's length exceeds " << chat_message::id_length << std::endl;
+        return 1;
+    }
+
+    char id[chat_message::id_length + 1] = "";
+    std::memcpy(id, argv[3], std::strlen(argv[3]));
 
     try {
         boost::asio::io_context io_context;
         tcp::resolver resolver(io_context);
         auto endpoints = resolver.resolve(argv[1], argv[2]);
-        chat_client client(io_context, endpoints);
+        chat_client client(io_context, endpoints, id);
         std::thread t([&io_context]() {
             io_context.run();
             });
@@ -124,8 +148,10 @@ int main(int argc, char* argv[]) {
         char line[chat_message::max_body_length + 1];
         while (std::cin.getline(line, chat_message::max_body_length + 1)) {
             chat_message msg;
-            msg.body_length(std::strlen(line));
-            std::memcpy(msg.body(), line, msg.body_length());
+            std::size_t len = std::strlen(line);
+            msg.body_length(len + chat_message::id_length);
+            std::memcpy(msg.id(), id, chat_message::id_length);
+            std::memcpy(msg.msg(), line, len);
             msg.encode_header();
             client.write(msg);
         }
