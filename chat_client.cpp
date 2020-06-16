@@ -6,14 +6,18 @@
 #include <deque>
 #include <iostream>
 #include <thread>
-#include <boost/asio.hpp>
+//#include <boost/asio.hpp>
 #include "chat_message.hpp"
 
-using boost::asio::ip::tcp;
+//using boost::asio::ip::tcp;
+//namespace asio = boost::asio;
+//using boost::asio;
+#include "asio.hpp"
+using asio::ip::tcp;
 
 class chat_client {
 public:
-    chat_client(boost::asio::io_context& io_context, 
+    chat_client(asio::io_context& io_context, 
         tcp::resolver::results_type& endpoints,
         char* id) :
         io_context_(io_context), 
@@ -41,7 +45,7 @@ public:
             }
         };
         //f();
-        boost::asio::post(io_context_, f);
+        asio::post(io_context_, f);
     }
 
     void close() {
@@ -53,11 +57,11 @@ public:
             socket_.close();
         };
         //f();
-        boost::asio::post(io_context_, f);
+        asio::post(io_context_, f);
     }
     
 private:
-    boost::asio::io_context& io_context_;
+    asio::io_context& io_context_;
     tcp::socket socket_;
     chat_message read_msg_;
     std::deque<chat_message> write_msgs_;
@@ -68,8 +72,8 @@ private:
         std::cout << __FUNCTION__ << std::endl;
         #endif
 
-        boost::asio::async_connect(socket_, endpoints, 
-            [this](boost::system::error_code error, tcp::endpoint) {
+        asio::async_connect(socket_, endpoints, 
+            [this](std::error_code error, tcp::endpoint) {
                 if (!error) {
                     //do_read_header();
                     send_id();
@@ -82,9 +86,9 @@ private:
         std::cout << __FUNCTION__ << std::endl;
         #endif
 
-        boost::asio::async_write(socket_, 
-            boost::asio::buffer(id_, chat_message::id_length), 
-            [this](boost::system::error_code error, std::size_t /*length*/) {
+        asio::async_write(socket_, 
+            asio::buffer(id_, chat_message::id_length), 
+            [this](std::error_code error, std::size_t /*length*/) {
                 if (!error) {
                     do_read_header();
                 }
@@ -96,9 +100,9 @@ private:
         std::cout << __FUNCTION__ << std::endl;
         #endif
 
-        boost::asio::async_read(socket_, 
-            boost::asio::buffer(read_msg_.data(), chat_message::header_length), 
-            [this](boost::system::error_code error, std::size_t /*length*/) {
+        asio::async_read(socket_, 
+            asio::buffer(read_msg_.data(), chat_message::header_length), 
+            [this](std::error_code error, std::size_t /*length*/) {
                 if (!error && read_msg_.decode_header()) {
                     do_read_body();
                 } else {
@@ -112,9 +116,9 @@ private:
         std::cout << __FUNCTION__ << std::endl;
         #endif
 
-        boost::asio::async_read(socket_,
-            boost::asio::buffer(read_msg_.body(), read_msg_.body_length()), 
-            [this](boost::system::error_code error, std::size_t /*length*/){
+        asio::async_read(socket_,
+            asio::buffer(read_msg_.body(), read_msg_.body_length()), 
+            [this](std::error_code error, std::size_t /*length*/){
                 if (!error) {
                     std::cout.write(read_msg_.id(), chat_message::id_length);
                     std::cout << " says: ";
@@ -133,9 +137,9 @@ private:
         #endif
 
         chat_message& msg = write_msgs_.front();
-        boost::asio::async_write(socket_, 
-            boost::asio::buffer(msg.data(), msg.length()), 
-            [this](boost::system::error_code error, std::size_t /*length*/){
+        asio::async_write(socket_, 
+            asio::buffer(msg.data(), msg.length()), 
+            [this](std::error_code error, std::size_t /*length*/){
                 if (!error) {
                     write_msgs_.pop_front();
                     if (!write_msgs_.empty()) {
@@ -163,7 +167,7 @@ int main(int argc, char* argv[]) {
     std::memcpy(id, argv[3], std::strlen(argv[3]));
 
     try {
-        boost::asio::io_context io_context;
+        asio::io_context io_context;
         tcp::resolver resolver(io_context);
         auto endpoints = resolver.resolve(argv[1], argv[2]);
         chat_client client(io_context, endpoints, id);

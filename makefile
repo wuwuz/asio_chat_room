@@ -1,4 +1,5 @@
-CFLAGS = -pg -g -Wall -std=c++11 -pthread -lboost_system -lboost_thread
+
+CFLAGS = -pg -g -Wall -std=c++11 -pthread -DASIO_STANDALONE -I ./asio/include
 
 all: chat_server chat_client
 
